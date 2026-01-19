@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Карта исследования: Кличевский район</title>
+    
+    <!-- ПОДКЛЮЧАЕМ БИБЛИОТЕКИ -->
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Плагин для времени -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-timedimension@1.1.1/dist/leaflet.timedimension.control.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-timedimension@1.1.1/dist/leaflet.timedimension.min.js"></script>
+    
+    <style>
+        #map {
+            height: 700px;
+            width: 100%;
+            border: 2px solid #2c3e50;
+            border-radius: 10px;
+        }
+        .time-control {
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🌍 Интерактивная карта исследования</h1>
+    <h2>"Орбитальная память земли: Кличевский район"</h2>
+    
+    <!-- КНОПКИ УПРАВЛЕНИЯ -->
+    <div style="margin: 10px 0;">
+        <button onclick="showSatellite()">Спутник</button>
+        <button onclick="showMap()">Карта</button>
+        <button onclick="toggleForest()">Лесная зона</button>
+        <button onclick="showAnimation()">Анимация изменений</button>
+    </div>
+    
+    <!-- ОКНО С КАРТОЙ -->
+    <div id="map"></div>
+    
+    <!-- ЛЕГЕНДА -->
+    <div style="background: #f8f9fa; padding: 15px; margin-top: 10px; border-radius: 5px;">
+        <h3>📋 Легенда:</h3>
+        <div><span style="color: #27ae60;">■</span> Заказник "Острова Дулебы"</div>
+        <div><span style="color: #e74c3c;">■</span> Сожжённые деревни (1943)</div>
+        <div><span style="color: #2980b9;">■</span> Усакинская партизанская зона</div>
+        <div><span style="color: #f1c40f;">■</span> Результаты классификации Landsat</div>
+    </div>
+
+    <script>
+        // 1. СОЗДАЁМ КАРТУ
+        var map = L.map('map').setView([53.7, 29.3], 11);
+        
+        // 2. ДОБАВЛЯЕМ ФОНОВЫЕ СЛОИ
+        var satellite = L.tileLayer(
+            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+            { attribution: 'Esri' }
+        );
+        
+        var osm = L.tileLayer(
+            'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+            { attribution: 'OpenStreetMap' }
+        ).addTo(map); // добавляем OSM по умолчанию
+        
+        // 3. ЗАГРУЖАЕМ ТВОИ ДАННЫЕ (GeoJSON)
+        // Заказник
+        fetch('data/zapovednik.geojson')
+            .then(response => response.json())
+            .then(data => {
+                L.geoJSON(data, {
+                    style: {color: '#27ae60', fillOpacity: 0.2, weight: 3},
+                    onEachFeature: function(feature, layer) {
+                        layer.bindPopup(`<b>${feature.properties.name}</b><br>
+                            Площадь: ${feature.properties.area || '?'} га<br>
+                            Год создания: ${feature.properties.year || 1998}`);
+                    }
+                }).addTo(map);
+            });
+        
+        // Деревни
+        fetch('data/villages.geojson')
+            .then(response => response.json())
+            .then(data => {
+                L.geoJSON(data, {
+                    pointToLayer: function(feature, latlng) {
+                        return L.circleMarker(latlng, {
+                            radius: 8,
+                            color: '#e74c3c',
+                            fillOpacity: 0.7
+                        });
+                    },
+                    onEachFeature: function(feature, layer) {
+                        layer.bindPopup(`<b>${feature.properties.name}</b><br>
+                            Статус: ${feature.properties.status}<br>
+                            Дата: ${feature.properties.year_burned}`);
+                    }
+                }).addTo(map);
+            });
+        
+        // 4. ДОБАВЛЯЕМ СЛОЙ КЛАССИФИКАЦИИ
+        // Если у тебя есть тайлы в папке tiles/
+        var classificationLayer = L.tileLayer('tiles/{z}/{x}/{y}.png', {
+            opacity: 0.6,
+            attribution: 'Классификация Landsat автора'
+        });
+        
+        // 5. ДОБАВЛЯЕМ СЛАЙДЕР ВРЕМЕНИ
+        var timeLayers = {};
+        
+        // Пример для разных годов (замени на свои URL)
+        var years = [1985, 2000, 2010, 2020, 2024];
+        years.forEach(year => {
+            timeLayers[year] = L.tileLayer(
+                `https://example.com/tiles/${year}/{z}/{x}/{y}.png`, // замени на свои URL
+                { opacity: 0.7 }
+            );
+        });
+        
+        // 6. ФУНКЦИИ ДЛЯ КНОПОК
+        function showSatellite() {
+            map.removeLayer(osm);
+            map.addLayer(satellite);
+        }
+        
+        function showMap() {
+            map.removeLayer(satellite);
+            map.addLayer(osm);
+        }
+        
+        function toggleForest() {
+            // Загружаем лесной слой при клике
+            fetch('data/forest.geojson')
+                .then(response => response.json())
+                .then(data => {
+                    L.geoJSON(data, {
+                        style: {color: '#2980b9', fillOpacity: 0.1, weight: 2}
+                    }).addTo(map);
+                });
+        }
+        
+        function showAnimation() {
+            alert('Анимация будет здесь! По годам: 1985-2024');
+            // Здесь можно добавить реальную анимацию
+        }
+        
+        // 7. ДОБАВЛЯЕМ ПАНЕЛЬ УПРАВЛЕНИЯ СЛОЯМИ
+        var baseLayers = {
+            "Обычная карта": osm,
+            "Спутниковый снимок": satellite
+        };
+        
+        var overlayLayers = {
+            "Классификация 2024": classificationLayer
+        };
+        
+        L.control.layers(baseLayers, overlayLayers).addTo(map);
+        
+    </script>
+    
+    <div style="margin-top: 20px; color: #666; font-size: 0.9em;">
+        <p>Карта создана в рамках исследовательской работы. Данные: Landsat (USGS/NASA), OpenStreetMap.</p>
+        <p id="coords">Координаты: <span id="latlng"></span></p>
+    </div>
+    
+    <script>
+        // Показываем координаты при клике
+        map.on('click', function(e) {
+            document.getElementById('latlng').innerHTML = 
+                e.latlng.lat.toFixed(4) + ', ' + e.latlng.lng.toFixed(4);
+        });
+    </script>
+</body>
+</html>
